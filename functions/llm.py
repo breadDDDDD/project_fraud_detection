@@ -14,4 +14,8 @@ class LLMService:
             response = self.client.models.generate_content(model = settings.GEMINI_MODEL ,contents =prompt)
             return response.text
         except Exception as e:
+            import traceback
+            print(traceback.format_exc())
+            if hasattr(e, "response"):
+                print(e.response)
             raise Exception(f"Gemini request failed: {e}")

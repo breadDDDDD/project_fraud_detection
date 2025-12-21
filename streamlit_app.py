@@ -30,6 +30,7 @@ def load_services():
     return llm, rag, sql, doc, router
 
 llm, rag_pipeline, sql_pipeline, doc_ingestor, router = load_services()
+@st.cache_data(show_spinner=False)
 def check_db():
     try:
         db = DatabaseService()
@@ -38,7 +39,7 @@ def check_db():
     except:
         return False
 
-
+@st.cache_data(show_spinner=False)
 def check_pinecone():
     try:
         pc = Pinecone(api_key=settings.PINECONE_API_KEY)
@@ -47,7 +48,7 @@ def check_pinecone():
     except:
         return False
 
-
+@st.cache_data(show_spinner=False)
 def check_ollama():
     try:
         res = requests.get(f"{settings.OLLAMA_HOST}/api/tags", timeout=5)
@@ -55,7 +56,7 @@ def check_ollama():
     except:
         return False
 
-
+@st.cache_data(show_spinner=False)
 def status_badge(ok, label):
     color = "green" if ok else "red"
     text = "Connected" if ok else "Disconnected"

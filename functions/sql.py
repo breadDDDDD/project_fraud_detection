@@ -11,6 +11,7 @@ Rules:
 - Prefer aggregated insights when appropriate
 - If the required table or column does not exist, pick the closest valid alternative from schema.
 - DO NOT explain or use English. Output ONLY raw SQL.
+- Output only the SQL. Do not say "Here is the query" or wrap it in ```sql``` blocks.
 - Always limit results to maximum 10000 rows using TOP or OFFSET/FETCH.
 """
 
@@ -25,7 +26,16 @@ class SQLPipeline:
     def __init__(self, db, llm):
         self.db = db
         self.llm = llm
-
+    
+    def clean_sql_output(self, query: str) -> str:
+        query = re.sub(r"```sql|```|`", "", query, flags=re.IGNORECASE).strip()
+        # Only keep text from the first SELECT to the first semicolon (if multiple statements)
+        match = re.search(r"(select\b.*?;?)$", query, re.IGNORECASE | re.DOTALL)
+        if match:
+            query = match.group(1).strip()
+        else:
+            raise Exception("No valid SELECT statement found")
+        return query
 
     def natural_to_sql(self, question, schema_info):
         prompt = f"""
@@ -39,6 +49,7 @@ DATABASE SCHEMA:
 """
 
         sql_query = self.llm.ask(prompt).strip()
+        sql_query = self.clean_sql_output(sql_query)
         return sql_query
 
 
@@ -52,7 +63,6 @@ DATABASE SCHEMA:
             raise Exception("Only SELECT queries allowed")
 
         return query
-
 
     def execute_sql(self, query):
         try:
