@@ -11,7 +11,7 @@ class LLMService:
 
     def ask(self, prompt):
         try:
-            response = self.client.models.generate_content(model = 'gemini-2.5-flash-lite',contents =prompt)
+            response = self.client.models.generate_content(model = settings.GEMINI_MODEL ,contents =prompt)
             return response.text
         except Exception as e:
             raise Exception(f"Gemini request failed: {e}")
