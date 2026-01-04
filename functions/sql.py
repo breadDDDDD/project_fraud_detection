@@ -1,5 +1,6 @@
 import pandas as pd
 import re
+from google.genai import types
 
 SQL_SYSTEM_PROMPT = """
 You are an expert T-SQL generator.
@@ -12,13 +13,17 @@ Rules:
 - If the required table or column does not exist, pick the closest valid alternative from schema.
 - DO NOT explain or use English. Output ONLY raw SQL.
 - Output only the SQL. Do not say "Here is the query" or wrap it in ```sql``` blocks.
-- Always limit results to maximum 10000 rows using TOP or OFFSET/FETCH.
+- Always limit results to maximum 100 rows using TOP or OFFSET/FETCH.
 """
 
 SUMMARY_PROMPT = """
 You are a fraud analytics expert.
-Summarize the SQL result in clear, concise business language.
-Explain patterns, trends and key takeaways.
+1. Summarize the SQL result in clear, concise business language.
+2. Explain patterns, trends and key takeaways.
+3. NEVER make up answers. If the information is not available, respond with "I don't have access to the required information".
+4. FORMAT your responses in a user-friendly manner, providing explanations and reasoning when necessary.
+5. DO NOT overthink your responses, keep them simple and to the point.
+6. Keep any responses under 1000 words to reduce wait times.
 """
 
 
@@ -39,16 +44,16 @@ class SQLPipeline:
 
     def natural_to_sql(self, question, schema_info):
         prompt = f"""
-{SQL_SYSTEM_PROMPT}
+                {SQL_SYSTEM_PROMPT}
 
-Question:
-{question}
+                Question:
+                {question}
 
-DATABASE SCHEMA:
-{schema_info}
-"""
+                DATABASE SCHEMA:
+                {schema_info}
+                """
 
-        sql_query = self.llm.ask(prompt).strip()
+        sql_query = self.llm.worker(prompt).strip()
         sql_query = self.clean_sql_output(sql_query)
         return sql_query
 
@@ -80,6 +85,7 @@ DATABASE SCHEMA:
     def summarize(self, df, question):
         try:
             prompt = f"""
+            
 {SUMMARY_PROMPT}
 
 User Question:
@@ -90,7 +96,7 @@ Data:
 
 Provide insight:
 """
-            return self.llm.ask(prompt)
+            return self.llm.worker(prompt)
 
         except Exception as e:
             raise Exception(f"Summary generation failed: {e}")
@@ -110,21 +116,37 @@ Provide insight:
         try:
             schema = self.db.get_schema()
             schema_text = self.format_schema(schema)
-
             sql_query = self.natural_to_sql(question, schema_text)
-
             print("Generated SQL:", sql_query)
-
             df = self.execute_sql(sql_query)
-
             if df.empty:
-                return "SQL executed successfully but returned no data."
-
+                return "SQL executed successfully but returned no data available."
             summary = self.summarize(df, question)
 
             return f"""
-                    ```sql
                     {summary}
                     """
         except Exception as e:
             raise Exception(f"SQL Pipeline Failed: {e}")
+        
+    def handle_tool_call(self, tool_call):
+        if tool_call.name == "get_sql":
+            return self.run(**tool_call.args)
+
+        raise ValueError(f"Unknown tool: {tool_call.name}")
+        
+def get_sql_tool():
+    return types.FunctionDeclaration(
+        name="get_sql",
+        description="Generate an SQL query, retrieve the information, and generate a summary from the information based on the question given.",
+        parameters=types.Schema(
+            type=types.Type.OBJECT,
+            properties={
+                "question": types.Schema(
+                    type=types.Type.STRING,
+                    description="the question asked by the user regarding the information stored within the database."
+                )
+            },
+            required=["question"]
+        )
+    )  

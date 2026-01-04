@@ -6,7 +6,7 @@ from functions.llm import LLMService
 from functions.rag import RagPipeline
 from functions.sql import SQLPipeline
 from functions.add_document import DocumentIngestor
-from functions.router import Router
+# from functions.router import Router
 import requests
 from utils.config import settings
 from pinecone import Pinecone
@@ -20,16 +20,20 @@ def load_services():
     db = DatabaseService()
     embedder = EmbeddingService()
     vector = VectorService()
-    llm = LLMService()
 
-    rag = RagPipeline(embedder, vector, llm)
-    sql = SQLPipeline(db, llm)
+    rag = RagPipeline(embedder, vector, None)
+    sql = SQLPipeline(db, None)
     doc = DocumentIngestor(embedder, vector)
-    router = Router(llm)
+    llm = LLMService(sql_pipeline=sql, rag_pipeline=rag)
+    rag.llm = llm
+    sql.llm = llm
+    # router = Router(llm)
+    
 
-    return llm, rag, sql, doc, router
-
-llm, rag_pipeline, sql_pipeline, doc_ingestor, router = load_services()
+    # return llm, rag, sql, doc, router
+    return llm, doc
+# llm, rag_pipeline, sql_pipeline, doc_ingestor, router = load_services()
+llm, doc_ingestor = load_services()
 @st.cache_data(show_spinner=False)
 def check_db():
     try:
@@ -114,26 +118,32 @@ with col2:
 #         except Exception as e:
 #             st.error(str(e))
     
+# if st.button("Send") and question:
+#     with st.spinner("Thinking..."):
+#         try:
+#             mode = router.decide(question)
+
+#             if mode == "GENERAL":
+#                 answer = llm.ask(question)
+
+#             elif mode == "RAG":
+#                 answer = rag_pipeline.query(question)
+
+#             elif mode == "SQL":
+#                 answer = sql_pipeline.run(question)
+
+#             # st.info(f"mmode Selected: {mode}")
+#             st.success(answer)
+
+#         except Exception as e:
+#             st.error(str(e))
 if st.button("Send") and question:
     with st.spinner("Thinking..."):
         try:
-            mode = router.decide(question)
-
-            if mode == "GENERAL":
-                answer = llm.ask(question)
-
-            elif mode == "RAG":
-                answer = rag_pipeline.query(question)
-
-            elif mode == "SQL":
-                answer = sql_pipeline.run(question)
-
-            # st.info(f"mmode Selected: {mode}")
+            answer = llm.ask(question)
             st.success(answer)
-
         except Exception as e:
             st.error(str(e))
-
 st.subheader("Upload Knowledge File")
 
 uploaded_file = st.file_uploader(
